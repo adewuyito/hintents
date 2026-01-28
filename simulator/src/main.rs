@@ -10,6 +10,7 @@ struct SimulationRequest {
     result_meta_xdr: String,
     // Key XDR -> Entry XDR
     ledger_entries: Option<HashMap<String, String>>,
+    profile: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -18,6 +19,7 @@ struct SimulationResponse {
     error: Option<String>,
     events: Vec<String>,
     logs: Vec<String>,
+    flamegraph: Option<String>,
 }
 
 fn main() {
