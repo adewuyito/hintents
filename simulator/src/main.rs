@@ -1,22 +1,11 @@
+// Copyright 2025 Erst Users
+// SPDX-License-Identifier: Apache-2.0
 
 mod cli;
 mod config;
 mod gas_optimizer;
 mod ipc;
 mod theme;
-// Copyright (c) 2026 dotandev
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
 
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
@@ -85,7 +74,10 @@ struct SimulationResponse {
     budget_usage: Option<BudgetUsage>,
 }
 
-fn execute_operations(_host: &soroban_env_host::Host, _ops: &[soroban_env_host::xdr::Operation]) -> Result<Vec<String>, soroban_env_host::HostError> {
+fn execute_operations(
+    _host: &soroban_env_host::Host,
+    _ops: &[soroban_env_host::xdr::Operation],
+) -> Result<Vec<String>, soroban_env_host::HostError> {
     // Placeholder for actual execution logic using the host
     // In a real scenario, this would apply operations.
     // For now we just return empty logs or mock behavior if needed
@@ -168,7 +160,10 @@ fn main() {
     if let Some(entries) = &request.ledger_entries {
         for (key_xdr, entry_xdr) in entries {
             let _key = match base64::engine::general_purpose::STANDARD.decode(key_xdr) {
-                Ok(b) => match soroban_env_host::xdr::LedgerKey::from_xdr(b, soroban_env_host::xdr::Limits::none()) {
+                Ok(b) => match soroban_env_host::xdr::LedgerKey::from_xdr(
+                    b,
+                    soroban_env_host::xdr::Limits::none(),
+                ) {
                     Ok(k) => k,
                     Err(e) => return send_error(format!("Failed to parse LedgerKey XDR: {}", e)),
                 },
@@ -176,7 +171,10 @@ fn main() {
             };
 
             let _entry = match base64::engine::general_purpose::STANDARD.decode(entry_xdr) {
-                Ok(b) => match soroban_env_host::xdr::LedgerEntry::from_xdr(b, soroban_env_host::xdr::Limits::none()) {
+                Ok(b) => match soroban_env_host::xdr::LedgerEntry::from_xdr(
+                    b,
+                    soroban_env_host::xdr::Limits::none(),
+                ) {
                     Ok(e) => e,
                     Err(e) => return send_error(format!("Failed to parse LedgerEntry XDR: {}", e)),
                 },
@@ -263,7 +261,11 @@ fn main() {
                                 }
                             };
 
-                            let contract_id = event.event.contract_id.as_ref().map(|contract_id| format!("{:?}", contract_id));
+                            let contract_id = event
+                                .event
+                                .contract_id
+                                .as_ref()
+                                .map(|contract_id| format!("{:?}", contract_id));
 
                             let (topics, data) = match &event.event.body {
                                 soroban_env_host::xdr::ContractEventBody::V0(v0) => {
@@ -373,7 +375,7 @@ fn main() {
 // -----------------------------------------------------------------------------
 
 /// Decodes generic errors and WASM traps into human-readable messages.
-/// 
+///
 /// Differentiates between:
 /// 1. VM-initiated traps (WASM execution failures)
 /// 2. Host-initiated traps (Soroban environment logic failures)
