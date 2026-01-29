@@ -13,7 +13,9 @@ var Version = "dev"
 
 // Global flag variables
 var (
-	ProfileFlag bool
+	TimestampFlag int64
+	WindowFlag    int64
+	ProfileFlag   bool
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -54,6 +56,20 @@ func Execute() error {
 
 func init() {
 	// Root command initialization
+	rootCmd.PersistentFlags().Int64Var(
+		&TimestampFlag,
+		"timestamp",
+		0,
+		"Override the ledger header timestamp (Unix epoch)",
+	)
+
+	rootCmd.PersistentFlags().Int64Var(
+		&WindowFlag,
+		"window",
+		0,
+		"Run range simulation across a time window (seconds)",
+	)
+
 	rootCmd.PersistentFlags().BoolVar(
 		&ProfileFlag,
 		"profile",
@@ -65,15 +81,3 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 }
 
-// currentSession stores the active debugging session
-var currentSession interface{}
-
-// SetCurrentSession stores the current session data
-func SetCurrentSession(session interface{}) {
-	currentSession = session
-}
-
-// GetCurrentSession retrieves the current session data
-func GetCurrentSession() interface{} {
-	return currentSession
-}

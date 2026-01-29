@@ -22,6 +22,8 @@ struct SimulationRequest {
     result_meta_xdr: String,
     // Key XDR -> Entry XDR
     ledger_entries: Option<HashMap<String, String>>,
+    timestamp: Option<i64>,
+    ledger_sequence: Option<u32>,
     // Optional: Path to local WASM file for local replay
     wasm_path: Option<String>,
     // Optional: Mock arguments for local replay (JSON array of strings)
@@ -108,6 +110,18 @@ fn main() {
     host.set_diagnostic_level(soroban_env_host::DiagnosticLevel::Debug)
         .unwrap();
 
+    // Override Ledger Info if provided
+    if request.timestamp.is_some() || request.ledger_sequence.is_some() {
+        host.with_mut_ledger_info(|ledger_info| {
+            if let Some(ts) = request.timestamp {
+                ledger_info.timestamp = ts as u64;
+            }
+            if let Some(seq) = request.ledger_sequence {
+                ledger_info.sequence_number = seq;
+            }
+        })
+        .unwrap();
+    }
     // Populate Host Storage
     let mut loaded_entries_count = 0;
     if let Some(entries) = &request.ledger_entries {
@@ -194,44 +208,11 @@ fn decode_wasm_trap(err: &soroban_env_host::HostError) -> String {
     let err_str = format!("{:?}", err);
     let err_lower = err_str.to_lowercase();
 
-    // Check for VM-initiated traps
-    if err_lower.contains("wasm trap") {
-        if err_lower.contains("unreachable") {
-            return "Unreachable Instruction: The contract hit a panic or unreachable code path.".to_string();
-        }
-        if err_lower.contains("out of bounds") {
-            return "Out of Bounds Access: The contract tried to access invalid memory (OOB).".to_string();
-        }
-        if err_lower.contains("integer overflow") {
-            return "Integer Overflow: A mathematical operation exceeded the type limits.".to_string();
-        }
-        if err_lower.contains("stack overflow") {
-            return "Stack Overflow: The contract's recursion or stack usage is too high.".to_string();
-        }
-        if err_lower.contains("divide by zero") {
-            return "Division by Zero: The contract attempted to divide by zero.".to_string();
-        }
-        return format!("Wasm Trap: {}", err_str);
-    }
 
-    // Differentiate Host-initiated traps
-    if err_str.contains("HostError") {
-        return format!("Host-initiated Trap: {}", err_str);
-    }
-
-    format!("Execution Error: {}", err_str)
-}
-
-fn send_error(msg: String) {
-    let res = SimulationResponse {
-        status: "error".to_string(),
-        error: Some(msg),
-        events: vec![],
-        logs: vec![],
         flamegraph: None,
         optimization_report: None,
         budget_usage: None,
     };
     println!("{}", serde_json::to_string(&res).unwrap());
 
-}
+
