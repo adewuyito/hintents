@@ -193,6 +193,11 @@ export class FallbackRPCClient {
                 return true;
             }
 
+            // Timeout errors - Fix: initially forgot to handle axios specific aborts
+            if (axiosError.code === 'ECONNABORTED') {
+                return true;
+            }
+
             // HTTP 5xx errors (server errors)
             if (axiosError.response && axiosError.response.status >= 500) {
                 return true;
