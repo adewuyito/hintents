@@ -1,5 +1,9 @@
 // Copyright 2025 Erst Users
 // SPDX-License-Identifier: Apache-2.0
+mod theme;
+mod config;
+mod cli;
+mod ipc;
 
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
@@ -7,6 +11,11 @@ use soroban_env_host::xdr::ReadXdr;
 use std::collections::HashMap;
 use std::io::{self, Read};
 use std::panic;
+use ipc::validate::validate_request;
+use ipc::types::SimulationRequest; // your generated types
+use serde_json::from_value;
+
+
 
 mod gas_optimizer;
 use gas_optimizer::{BudgetMetrics, GasOptimizationAdvisor, OptimizationReport};
@@ -48,6 +57,7 @@ struct StructuredError {
 }
 
 fn main() {
+     cli::trace_viewer::render_trace();
     // Read JSON from Stdin
     let mut buffer = String::new();
     if let Err(e) = io::stdin().read_to_string(&mut buffer) {
@@ -325,6 +335,20 @@ fn send_error(msg: String) {
         budget_usage: None,
     };
     println!("{}", serde_json::to_string(&res).unwrap());
+}
+fn handle_input(json_input: &str) -> Result<SimulationRequest, String> {
+    // Step 1: validate JSON against schema
+    let validated_value = validate_request(json_input)?;
+
+    // Step 2: deserialize into Rust type
+    let req: SimulationRequest = from_value(validated_value).map_err(|e| e.to_string())?;
+
+    // Step 3: optional version check
+    if req.version != "1.0" {
+        return Err(format!("Unsupported IPC schema version: {}", req.version));
+    }
+
+    Ok(req)
 }
 
 mod test;
