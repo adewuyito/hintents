@@ -1,6 +1,6 @@
 .PHONY: build test lint lint-unused test-unused validate-ci validate-interface clean
 .PHONY: build test lint lint-unused test-unused validate-ci clean
-.PHONY: build test lint validate-errors clean
+.PHONY: build test lint validate-errors clean bench bench-rpc bench-sim bench-profile
 
 # Build variables
 VERSION?=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -56,3 +56,19 @@ clean:
 deps:
 	go mod tidy
 	go mod download
+
+# Run benchmarks
+bench:
+	go test -bench=. -benchmem ./internal/rpc ./internal/simulator
+
+# Run RPC benchmarks only
+bench-rpc:
+	go test -bench=. -benchmem ./internal/rpc
+
+# Run simulator benchmarks only
+bench-sim:
+	go test -bench=. -benchmem ./internal/simulator
+
+# Run benchmarks with CPU profiling
+bench-profile:
+	go test -bench=. -benchmem -cpuprofile=cpu.prof ./internal/rpc ./internal/simulator
