@@ -181,8 +181,8 @@ Local WASM Replay Mode:
 			return fmt.Errorf("transaction hash is required when not using --wasm or --demo flag")
 		}
 
-		if len(args[0]) != 64 {
-			return fmt.Errorf("error: invalid transaction hash format (expected 64 hex characters, got %d)", len(args[0]))
+		if err := rpc.ValidateTransactionHash(args[0]); err != nil {
+			return fmt.Errorf("error: invalid transaction hash format: %w", err)
 		}
 
 		// Validate network flag
