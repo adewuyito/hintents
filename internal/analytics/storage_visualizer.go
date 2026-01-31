@@ -4,6 +4,13 @@ import (
 	"fmt"
 )
 
+type StorageGrowthReport struct {
+	BeforeBytes int64
+	AfterBytes  int64
+	DeltaBytes  int64
+	PerKeyDelta map[string]int64
+}
+
 func PrintStorageReport(report *StorageGrowthReport, fee int64) {
 	fmt.Println("📦 Contract Storage Growth Report")
 	fmt.Println("--------------------------------")

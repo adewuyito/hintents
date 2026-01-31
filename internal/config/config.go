@@ -1,22 +1,10 @@
 // Copyright 2026 dotandev
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2026 dotandev
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
 
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -39,12 +27,14 @@ var validNetworks = map[string]bool{
 	string(NetworkStandalone): true,
 }
 
+// Config represents the general configuration for erst
 type Config struct {
-	RpcUrl        string
-	Network       Network
-	SimulatorPath string
-	LogLevel      string
-	CachePath     string
+	RpcUrl        string  `json:"rpc_url,omitempty"`
+	Network       Network `json:"network,omitempty"`
+	SimulatorPath string  `json:"simulator_path,omitempty"`
+	LogLevel      string  `json:"log_level,omitempty"`
+	CachePath     string  `json:"cache_path,omitempty"`
+	RPCToken      string  `json:"rpc_token,omitempty"`
 }
 
 var defaultConfig = &Config{
@@ -55,6 +45,41 @@ var defaultConfig = &Config{
 	CachePath:     filepath.Join(os.ExpandEnv("$HOME"), ".erst", "cache"),
 }
 
+// GetGeneralConfigPath returns the path to the general configuration file
+func GetGeneralConfigPath() (string, error) {
+	configDir, err := GetConfigPath()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(configDir, "config.json"), nil
+}
+
+// LoadConfig loads the general configuration from disk (JSON format)
+func LoadConfig() (*Config, error) {
+	configPath, err := GetGeneralConfigPath()
+	if err != nil {
+		return nil, err
+	}
+
+	// If file doesn't exist, return default config
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		return DefaultConfig(), nil
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	config := DefaultConfig()
+	if err := json.Unmarshal(data, config); err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	return config, nil
+}
+
+// Load loads the configuration from environment variables and TOML files
 func Load() (*Config, error) {
 	cfg := &Config{
 		RpcUrl:        getEnv("ERST_RPC_URL", defaultConfig.RpcUrl),
@@ -62,6 +87,7 @@ func Load() (*Config, error) {
 		SimulatorPath: getEnv("ERST_SIMULATOR_PATH", defaultConfig.SimulatorPath),
 		LogLevel:      getEnv("ERST_LOG_LEVEL", defaultConfig.LogLevel),
 		CachePath:     getEnv("ERST_CACHE_PATH", defaultConfig.CachePath),
+		RPCToken:      getEnv("ERST_RPC_TOKEN", ""),
 	}
 
 	if err := cfg.loadFromFile(); err != nil {
@@ -92,65 +118,16 @@ func (c *Config) loadFromFile() error {
 }
 
 func (c *Config) loadTOML(path string) error {
-	_, err := os.Stat(path)
-	if err != nil {
+	if _, err := os.Stat(path); err != nil {
 		return err
 	}
 
 	data, err := os.ReadFile(path)
-	"encoding/json"
-	"fmt"
-	"os"
-	"path/filepath"
-)
-
-// Config represents the general configuration for erst
-type Config struct {
-	RPCToken string `json:"rpc_token,omitempty"`
-}
-
-// GetGeneralConfigPath returns the path to the general configuration file
-func GetGeneralConfigPath() (string, error) {
-	configDir, err := GetConfigPath()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(configDir, "config.json"), nil
-}
-
-// LoadConfig loads the general configuration from disk
-func LoadConfig() (*Config, error) {
-	configPath, err := GetGeneralConfigPath()
-	if err != nil {
-		return nil, err
-	}
-
-	// If file doesn't exist, return empty config but no error
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		return &Config{}, nil
-	}
-
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read config file: %w", err)
-	}
-
-	var config Config
-	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse config file: %w", err)
-	}
-
-	return &config, nil
-}
-
-// SaveConfig saves the general configuration to disk
-func SaveConfig(config *Config) error {
-	configPath, err := GetGeneralConfigPath()
 	if err != nil {
 		return err
 	}
 
- 	return c.parseTOML(string(data))
+	return c.parseTOML(string(data))
 }
 
 func (c *Config) parseTOML(content string) error {
@@ -181,19 +158,21 @@ func (c *Config) parseTOML(content string) error {
 			c.LogLevel = value
 		case "cache_path":
 			c.CachePath = value
+		case "rpc_token":
+			c.RPCToken = value
 		}
 	}
 
 	return nil
 }
 
-func (c *Config) Validate() error {
-	if c.RpcUrl == "" {
-		return fmt.Errorf("rpc_url cannot be empty")
+// SaveConfig saves the configuration to disk (JSON format)
+func SaveConfig(config *Config) error {
+	configPath, err := GetGeneralConfigPath()
+	if err != nil {
+		return err
 	}
 
-	if !validNetworks[string(c.Network)] {
-		return fmt.Errorf("invalid network: %s (valid: public, testnet, futurenet, standalone)", c.Network)
 	// Ensure config directory exists
 	configDir := filepath.Dir(configPath)
 	if err := os.MkdirAll(configDir, 0700); err != nil {
@@ -208,6 +187,18 @@ func (c *Config) Validate() error {
 	// Write with restricted permissions (owner only)
 	if err := os.WriteFile(configPath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	return nil
+}
+
+func (c *Config) Validate() error {
+	if c.RpcUrl == "" {
+		return fmt.Errorf("rpc_url cannot be empty")
+	}
+
+	if c.Network != "" && !validNetworks[string(c.Network)] {
+		return fmt.Errorf("invalid network: %s (valid: public, testnet, futurenet, standalone)", c.Network)
 	}
 
 	return nil
@@ -243,14 +234,13 @@ func getEnv(key, defaultValue string) string {
 }
 
 func DefaultConfig() *Config {
-	cfg := &Config{
+	return &Config{
 		RpcUrl:        defaultConfig.RpcUrl,
 		Network:       defaultConfig.Network,
 		SimulatorPath: defaultConfig.SimulatorPath,
 		LogLevel:      defaultConfig.LogLevel,
 		CachePath:     defaultConfig.CachePath,
 	}
-	return cfg
 }
 
 func NewConfig(rpcUrl string, network Network) *Config {

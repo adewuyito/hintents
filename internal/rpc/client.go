@@ -96,6 +96,10 @@ var (
 type Client struct {
 	HorizonURL   string
 	Horizon      horizonclient.ClientInterface
+	HorizonURL   string
+	AltURLs      []string
+	currIndex    int
+	mu           sync.RWMutex
 	Network      Network
 	SorobanURL   string
 	AltURLs      []string
@@ -171,6 +175,13 @@ func NewClientWithURLs(urls []string, net Network, token string) *Client {
 		AltURLs:    urls,
 		token:      token,
 		Config:     config,
+		HorizonURL:   urls[0],
+		AltURLs:      urls,
+		Network:      net,
+		SorobanURL:   sorobanURL,
+		token:        token,
+		Config:       config,
+		CacheEnabled: true,
 	}
 }
 
@@ -215,6 +226,8 @@ func createHTTPClient(token string) *http.Client {
 
 	return &http.Client{
 		Transport: transport,
+			transport: http.DefaultTransport,
+		},
 	}
 }
 
@@ -282,6 +295,7 @@ func (c *Client) getTransactionAttempt(ctx context.Context, hash string) (*Trans
 	tx, err := c.Horizon.TransactionDetail(hash)
 	if err != nil {
 		span.RecordError(err)
+		logger.Logger.Error("Failed to fetch transaction", "hash", hash, "error", err, "url", c.HorizonURL)
 		return nil, fmt.Errorf("failed to fetch transaction from %s: %w", c.HorizonURL, err)
 	}
 
@@ -291,7 +305,7 @@ func (c *Client) getTransactionAttempt(ctx context.Context, hash string) (*Trans
 		attribute.Int("result_meta.size_bytes", len(tx.ResultMetaXdr)),
 	)
 
-	logger.Logger.Info("Transaction fetched successfully", "hash", hash, "envelope_size", len(tx.EnvelopeXdr), "url", c.HorizonURL)
+	logger.Logger.Info("Transaction fetched", "hash", hash, "envelope_size", len(tx.EnvelopeXdr), "url", c.HorizonURL)
 
 	return ParseTransactionResponse(tx), nil
 
@@ -519,7 +533,7 @@ func (c *Client) GetLedgerEntries(ctx context.Context, keys []string) (map[strin
 
 	logger.Logger.Debug("Fetching ledger entries from RPC", "count", len(keysToFetch), "url", c.SorobanURL)
 	for attempt := 0; attempt < len(c.AltURLs); attempt++ {
-		entries, err := c.getLedgerEntriesAttempt(ctx, keys)
+		entries, err := c.getLedgerEntriesAttempt(ctx, keysToFetch)
 		if err == nil {
 			return entries, nil
 		}
@@ -536,9 +550,8 @@ func (c *Client) GetLedgerEntries(ctx context.Context, keys []string) (map[strin
 	return nil, fmt.Errorf("all Soroban RPC endpoints failed")
 }
 
-func (c *Client) getLedgerEntriesAttempt(ctx context.Context, keys []string) (map[string]string, error) {
-	logger.Logger.Debug("Fetching ledger entries", "count", len(keys), "url", c.HorizonURL)
-
+func (c *Client) getLedgerEntriesAttempt(ctx context.Context, keysToFetch []string) (map[string]string, error) {
+	logger.Logger.Debug("Fetching ledger entries", "count", len(keysToFetch), "url", c.HorizonURL)
 	reqBody := GetLedgerEntriesRequest{
 		Jsonrpc: "2.0",
 		ID:      1,
@@ -551,10 +564,6 @@ func (c *Client) getLedgerEntriesAttempt(ctx context.Context, keys []string) (ma
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Note: We use the current HorizonURL for Soroban RPC as well if provided via flag,
-	// or fallback to default if not. In this implementation, HorizonURL and SorobanRPC
-	// are assumed to be handled by the same endpoint or derived from it for simplicity
-	// in the fallback rotation.
 	targetURL := c.HorizonURL
 	if c.Network == Testnet && targetURL == "" {
 		targetURL = TestnetSorobanURL
@@ -603,10 +612,12 @@ func (c *Client) getLedgerEntriesAttempt(ctx context.Context, keys []string) (ma
 	}
 
 	logger.Logger.Info("Ledger entries fetched",
-		"total_requested", len(keys),
+// 		"total_requested", len(keys),
+		"total_requested", len(keysToFetch),
+		"from_cache", len(keysToFetch)-fetchedCount,
 		"from_rpc", fetchedCount,
+		"url", targetURL,
 	)
-	logger.Logger.Info("Ledger entries fetched successfully", "found", len(entries), "requested", len(keys), "url", targetURL)
 
 	return entries, nil
 }

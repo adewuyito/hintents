@@ -1,7 +1,6 @@
 // Copyright 2025 Erst Users
 // SPDX-License-Identifier: Apache-2.0
 
-
 package cmd
 
 import (
@@ -9,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"sync"
@@ -17,7 +17,7 @@ import (
 	"github.com/dotandev/hintents/internal/config"
 	"github.com/dotandev/hintents/internal/errors"
 	"github.com/dotandev/hintents/internal/localization"
-	"github.com/dotandev/hintents/internal/visualizer"
+	"github.com/dotandev/hintents/internal/logger"
 	"github.com/dotandev/hintents/internal/rpc"
 	"github.com/dotandev/hintents/internal/security"
 	"github.com/dotandev/hintents/internal/session"
@@ -25,6 +25,8 @@ import (
 	"github.com/dotandev/hintents/internal/snapshot"
 	"github.com/dotandev/hintents/internal/telemetry"
 	"github.com/dotandev/hintents/internal/tokenflow"
+	"github.com/dotandev/hintents/internal/visualizer"
+	"github.com/dotandev/hintents/internal/watch"
 
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/xdr"
@@ -46,6 +48,8 @@ var (
 	args               []string
 	noCacheFlag        bool
 	demoMode           bool
+	watchFlag          bool
+	watchTimeoutFlag   int
 )
 
 // DebugCommand holds dependencies for the debug command
@@ -205,6 +209,12 @@ Local WASM Replay Mode:
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, cmdArgs []string) error {
+		if verbose {
+			logger.SetLevel(slog.LevelInfo)
+		} else {
+			logger.SetLevel(slog.LevelWarn)
+		}
+
 		// Demo mode: print sample output for testing color detection (no network)
 		if demoMode {
 			return runDemoMode(cmdArgs)
@@ -275,6 +285,37 @@ Local WASM Replay Mode:
 		}
 
 		// Fetch transaction details
+		if watchFlag {
+			spinner := watch.NewSpinner()
+			poller := watch.NewPoller(watch.PollerConfig{
+				InitialInterval: 1 * time.Second,
+				MaxInterval:     10 * time.Second,
+				TimeoutDuration: time.Duration(watchTimeoutFlag) * time.Second,
+			})
+
+			spinner.Start("Waiting for transaction to appear on-chain...")
+
+			result, err := poller.Poll(ctx, func(pollCtx context.Context) (interface{}, error) {
+				_, pollErr := client.GetTransaction(pollCtx, txHash)
+				if pollErr != nil {
+					return nil, pollErr
+				}
+				return true, nil
+			}, nil)
+
+			if err != nil {
+				spinner.StopWithError("Failed to poll for transaction")
+				return fmt.Errorf("watch mode error: %w", err)
+			}
+
+			if !result.Found {
+				spinner.StopWithError("Transaction not found within timeout")
+				return fmt.Errorf("transaction %s not found after %d seconds", txHash, watchTimeoutFlag)
+			}
+
+			spinner.StopWithMessage("Transaction found! Starting debug...")
+		}
+
 		fmt.Printf("Fetching transaction: %s\n", txHash)
 		resp, err := client.GetTransaction(ctx, txHash)
 		if err != nil {
@@ -361,22 +402,13 @@ Local WASM Replay Mode:
 				go func() {
 					defer wg.Done()
 					var entries map[string]string
-					if snapshotFlag != "" {
-						snap, snapErr := snapshot.Load(snapshotFlag)
-						if snapErr != nil {
-							primaryErr = fmt.Errorf("failed to load snapshot: %w", snapErr)
-							return
-						}
-						entries = snap.ToMap()
-					} else {
-						var extractErr error
-						entries, extractErr = rpc.ExtractLedgerEntriesFromMeta(resp.ResultMetaXdr)
+					var extractErr error
+					entries, extractErr = rpc.ExtractLedgerEntriesFromMeta(resp.ResultMetaXdr)
+					if extractErr != nil {
+						entries, extractErr = client.GetLedgerEntries(ctx, keys)
 						if extractErr != nil {
-							entries, extractErr = client.GetLedgerEntries(ctx, keys)
-							if extractErr != nil {
-								primaryErr = extractErr
-								return
-							}
+							primaryErr = extractErr
+							return
 						}
 					}
 					primaryResult, primaryErr = runner.Run(&simulator.SimulationRequest{
@@ -393,11 +425,7 @@ Local WASM Replay Mode:
 					if noCacheFlag {
 						compareClient.CacheEnabled = false
 					}
-					entries, err := compareClient.GetLedgerEntries(ctx, keys)
-					if err != nil {
-						compareErr = err
 
-					// Try to get transaction from compare network
 					compareResp, txErr := compareClient.GetTransaction(ctx, txHash)
 					if txErr != nil {
 						compareErr = fmt.Errorf("failed to fetch transaction from %s: %w", compareNetworkFlag, txErr)
@@ -412,6 +440,7 @@ Local WASM Replay Mode:
 							return
 						}
 					}
+
 					compareResult, compareErr = runner.Run(&simulator.SimulationRequest{
 						EnvelopeXdr:   resp.EnvelopeXdr,
 						ResultMetaXdr: compareResp.ResultMetaXdr,
@@ -863,6 +892,8 @@ func init() {
 	debugCmd.Flags().StringSliceVar(&args, "args", []string{}, "Mock arguments for local replay (JSON array of strings)")
 	debugCmd.Flags().BoolVar(&noCacheFlag, "no-cache", false, "Disable local ledger state caching")
 	debugCmd.Flags().BoolVar(&demoMode, "demo", false, "Print sample output (no network) - for testing color detection")
+	debugCmd.Flags().BoolVar(&watchFlag, "watch", false, "Poll for transaction on-chain before debugging")
+	debugCmd.Flags().IntVar(&watchTimeoutFlag, "watch-timeout", 30, "Timeout in seconds for watch mode")
 
 	rootCmd.AddCommand(debugCmd)
 }

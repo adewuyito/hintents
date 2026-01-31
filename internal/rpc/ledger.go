@@ -112,22 +112,32 @@ func ExtractLedgerEntriesFromMeta(resultMetaXDR string) (map[string]string, erro
 	entries := make(map[string]string)
 
 	// Extract entries from TransactionMeta
-	switch meta := resultMeta.TxApplyProcessing.(type) {
-	case xdr.TransactionMeta:
-		// V0 or V1
-		extractFromLedgerEntryChanges(meta.Operations, entries)
+	switch resultMeta.TxApplyProcessing.V {
+	case 0:
+		if resultMeta.TxApplyProcessing.Operations != nil {
+			extractFromLedgerEntryChanges(*resultMeta.TxApplyProcessing.Operations, entries)
+		}
 
-	case *xdr.TransactionMetaV2:
-		// V2
-		extractFromLedgerEntryChanges(meta.Operations, entries)
+	case 1:
+		if resultMeta.TxApplyProcessing.V1 != nil {
+			extractFromLedgerEntryChanges(resultMeta.TxApplyProcessing.V1.Operations, entries)
+		}
 
-	case *xdr.TransactionMetaV3:
-		// V3 (Soroban)
-		extractFromLedgerEntryChanges(meta.Operations, entries)
+	case 2:
+		if v2 := resultMeta.TxApplyProcessing.V2; v2 != nil {
+			extractFromLedgerEntryChanges(v2.Operations, entries)
+			// Also extract from TxChangesBefore and TxChangesAfter
+			extractFromChanges(v2.TxChangesBefore, entries)
+			extractFromChanges(v2.TxChangesAfter, entries)
+		}
 
-		// Also extract from TxChangesBefore and TxChangesAfter
-		extractFromChanges(meta.TxChangesBefore, entries)
-		extractFromChanges(meta.TxChangesAfter, entries)
+	case 3:
+		if v3 := resultMeta.TxApplyProcessing.V3; v3 != nil {
+			extractFromLedgerEntryChanges(v3.Operations, entries)
+			// Also extract from TxChangesBefore and TxChangesAfter
+			extractFromChanges(v3.TxChangesBefore, entries)
+			extractFromChanges(v3.TxChangesAfter, entries)
+		}
 	}
 
 	return entries, nil
