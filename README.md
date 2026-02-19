@@ -17,6 +17,7 @@ Currently, when a Soroban transaction fails on mainnet, developers receive a gen
 2.  **Local Simulation**: Re-execute the transaction logically in a local environment.
 3.  **Trace decoding**: Map execution steps and failures back to readable instructions or Rust source lines.
 4.  **Source Mapping**: Map WASM instruction failures to specific Rust source code lines using debug symbols.
+5.  **Error Suggestions**: Heuristic-based engine that suggests potential fixes for common Soroban errors.
 
 ## Usage (MVP)
 
@@ -104,6 +105,7 @@ The command prints the signed audit log JSON to stdout so it can be redirected t
 - **[Project Proposal](docs/proposal.md)**: Detailed project proposal and roadmap.
 - **[Source Mapping](docs/source-mapping.md)**: Implementation details for mapping WASM failures to Rust source code.
 - **[Debug Symbols Guide](docs/debug-symbols-guide.md)**: How to compile Soroban contracts with debug symbols.
+- **[Error Suggestions](docs/ERROR_SUGGESTIONS.md)**: Heuristic-based error suggestion engine for common Soroban errors.
 
 ## Technical Analysis
 
