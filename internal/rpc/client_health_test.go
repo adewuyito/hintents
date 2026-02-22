@@ -16,7 +16,7 @@ import (
 func TestGetHealth_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
-		
+
 		var req GetHealthRequest
 		err := json.NewDecoder(r.Body).Decode(&req)
 		assert.NoError(t, err)
