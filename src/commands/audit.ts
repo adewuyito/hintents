@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import * as dotenv from 'dotenv';
 import { AuditLogger } from '../audit/AuditLogger';
+import { renderAuditHTML, writeAuditReport } from '../audit/AuditRenderer';
 import { createAuditSigner } from '../audit/signing/factory';
 
 // Load env for key/provider configuration
@@ -38,6 +39,29 @@ export function registerAuditCommands(program: Command): void {
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error(`[FAIL] audit signing failed: ${msg}`);
+        process.exit(1);
+      }
+    });
+
+  program
+    .command('audit:render')
+    .description('Render a raw ExecutionTrace or SignedAuditLog JSON payload to an HTML report')
+    .requiredOption('--payload <json>', 'JSON string containing the audit payload (ExecutionTrace or SignedAuditLog)')
+    .option('--output <path>', 'Write HTML to this file instead of stdout')
+    .option('--title <title>', 'Report title (default: "Audit Report")')
+    .action((opts: any) => {
+      try {
+        const payload = JSON.parse(opts.payload);
+
+        if (opts.output) {
+          writeAuditReport(payload, opts.output, opts.title);
+          console.error(`[OK] Audit report written to ${opts.output}`);
+        } else {
+          process.stdout.write(renderAuditHTML(payload, opts.title));
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error(`[FAIL] audit render failed: ${msg}`);
         process.exit(1);
       }
     });
