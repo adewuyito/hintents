@@ -62,7 +62,6 @@ func runStats(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// loadSimulationResponse retrieves the simulation data from the session store
 func loadSimulationResponse(cmd *cobra.Command, id string) (*simulator.SimulationResponse, error) {
 	if id != "" {
 		store, err := session.NewStore()
@@ -78,7 +77,6 @@ func loadSimulationResponse(cmd *cobra.Command, id string) (*simulator.Simulatio
 		return data.ToSimulationResponse()
 	}
 
-	// Reference the session package to get the active data
 	data := session.GetCurrentSession()
 	if data == nil {
 		return nil, fmt.Errorf("no active session. Run 'erst debug <tx-hash>' first")
