@@ -4,6 +4,9 @@
 import type { AuditSigner } from './types';
 import { SoftwareEd25519Signer } from './softwareSigner';
 import { Pkcs11Ed25519Signer } from './pkcs11Signer';
+import { KmsEd25519Signer } from './kmsSigner';
+
+export type HsmProvider = 'pkcs11' | 'software' | 'kms';
 import { KmsSigner } from './kmsSigner';
 
 export type SigningProvider = 'software' | 'pkcs11' | 'kms';
@@ -28,6 +31,10 @@ export interface CreateAuditSignerOpts {
 
 export function createAuditSigner(opts: CreateAuditSignerOpts): AuditSigner {
   const provider = (opts.hsmProvider?.toLowerCase() ?? 'software') as SigningProvider;
+
+  if (provider === 'kms') {
+    return new KmsEd25519Signer();
+  }
 
   if (provider === 'pkcs11') {
     return new Pkcs11Ed25519Signer();
