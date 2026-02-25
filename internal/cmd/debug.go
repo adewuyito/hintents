@@ -27,6 +27,7 @@ import (
 	"github.com/dotandev/hintents/internal/telemetry"
 	"github.com/dotandev/hintents/internal/tokenflow"
 	"github.com/dotandev/hintents/internal/visualizer"
+	"github.com/dotandev/hintents/internal/wat"
 	"github.com/dotandev/hintents/internal/watch"
 
 	"github.com/spf13/cobra"
@@ -728,9 +729,14 @@ func runLocalWasmReplay() error {
 			fmt.Printf("Error: %s\n", resp.Error)
 		}
 
-		if resp.SourceLocation != nil {
+		// Fallback to WAT disassembly if source mapping is unavailable but we have an offset
+		if resp.SourceLocation == "" && resp.WasmOffset != nil {
 			fmt.Println()
-			displaySourceLocation(resp.SourceLocation)
+			wasmBytes, err := os.ReadFile(wasmPath)
+			if err == nil {
+				fallbackMsg := wat.FormatFallback(wasmBytes, *resp.WasmOffset, 5)
+				fmt.Println(fallbackMsg)
+			}
 		}
 	} else {
 		fmt.Printf("%s Execution completed successfully\n", visualizer.Success())

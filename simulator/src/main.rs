@@ -644,6 +644,9 @@ fn main() {
                 None
             };
 
+            let error_msg = format!("{:?}", host_error);
+            let wasm_offset = extract_wasm_offset(&error_msg);
+
             let response = SimulationResponse {
                 status: "error".to_string(),
                 error: Some(serde_json::to_string(&structured_error).unwrap()),
@@ -654,7 +657,7 @@ fn main() {
                 flamegraph: None,
                 optimization_report: None,
                 budget_usage: None,
-                source_location,
+                source_location: None,
                 wasm_offset,
             };
             println!("{}", serde_json::to_string(&response).unwrap());
@@ -686,6 +689,18 @@ fn main() {
     }
 }
 
+fn extract_wasm_offset(error_msg: &str) -> Option<u64> {
+    // Look for patterns like "@ 0x[HEX]" in the error message
+    // Soroban/Wasmi errors often contain stack traces like:
+    // "  0: func[42] @ 0xa3c"
+    
+    for line in error_msg.lines() {
+        if let Some(pos) = line.find("@ 0x") {
+            let hex_part = &line[pos + 4..];
+            let end = hex_part.find(|c: char| !c.is_ascii_hexdigit()).unwrap_or(hex_part.len());
+            if let Ok(offset) = u64::from_str_radix(&hex_part[..end], 16) {
+                return Some(offset);
+            }
 /// Translate a raw soroban / WASM error string into a user-friendly description.
 ///
 /// Protocol 21 standardised the set of VM trap codes emitted by the host.

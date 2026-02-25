@@ -45,7 +45,7 @@ pub struct SimulationResponse {
     pub optimization_report: Option<OptimizationReport>,
     pub budget_usage: Option<BudgetUsage>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source_location: Option<SourceLocation>,
+    pub source_location: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub wasm_offset: Option<u64>,
 }
