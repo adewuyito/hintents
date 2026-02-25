@@ -331,6 +331,9 @@ func (v *InteractiveViewer) displayCurrentState() {
 	if state.ReturnValue != nil {
 		fmt.Println(wrapField("Return", fmt.Sprintf("%v", state.ReturnValue), termW))
 	}
+	if state.WasmInstruction != "" {
+		fmt.Printf("WASM Instruction: %s\n", state.WasmInstruction)
+	}
 	if state.Error != "" {
 		indicator := visualizer.Error() + " "
 		fmt.Printf("%s%s\n", indicator, wrapField("Error", state.Error, termW-len(indicator)))

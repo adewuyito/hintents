@@ -147,6 +147,10 @@ fn categorize_events(events: &soroban_env_host::events::Events) -> Vec<Categoriz
             let contract_id = e.event.contract_id.as_ref().map(|id| format!("{id:?}"));
             let topics = match &e.event.body {
                 soroban_env_host::xdr::ContractEventBody::V0(v0) => {
+                    v0.topics
+                        .iter()
+                        .map(|t| format!("{:?}", t))
+                        .collect::<Vec<String>>()
                     v0.topics.iter().map(|t| format!("{t:?}")).collect()
                 }
             };
@@ -154,6 +158,7 @@ fn categorize_events(events: &soroban_env_host::events::Events) -> Vec<Categoriz
                 soroban_env_host::xdr::ContractEventBody::V0(v0) => format!("{:?}", v0.data),
             };
 
+            let wasm_instruction = extract_wasm_instruction(&topics, &data);
             CategorizedEvent {
                 category,
                 event: DiagnosticEvent {
@@ -169,6 +174,8 @@ fn categorize_events(events: &soroban_env_host::events::Events) -> Vec<Categoriz
                     contract_id,
                     topics,
                     data,
+                    in_successful_contract_call: e.failed_call,
+                    wasm_instruction,
                     // failed_call=true means the call that emitted this event
                     // actually failed; so a successful call is the inverse.
                     in_successful_contract_call: !e.failed_call,
@@ -491,11 +498,14 @@ fn main() {
                                     }
                                 };
 
+                                let wasm_instruction = extract_wasm_instruction(&topics, &data);
                                 DiagnosticEvent {
                                     event_type,
                                     contract_id,
                                     topics,
                                     data,
+                                    in_successful_contract_call: event.failed_call,
+                                    wasm_instruction,
                                     // failed_call=true means the call failed;
                                     // negate to get "was this a successful call?".
                                     in_successful_contract_call: !event.failed_call,
@@ -609,6 +619,16 @@ fn main() {
             println!("{}", serde_json::to_string(&response).unwrap());
         Ok(Err(host_error)) => {
             // Host error during execution (e.g., contract trap, validation failure)
+            let error_msg = format!("{:?}", host_error);
+            let decoded_msg = decode_error(&error_msg);
+            
+            let structured_error = StructuredError {
+                error_type: "HostError".to_string(),
+                message: decoded_msg.clone(),
+                details: Some(format!(
+                    "Contract execution failed with host error: {}",
+                    decoded_msg
+                )),
             let error_debug = format!("{:?}", host_error);
             let wasm_trace = WasmStackTrace::from_host_error(&error_debug);
 
@@ -858,6 +878,27 @@ mod tests {
 
     #[test]
     fn test_decode_vm_traps() {
+        assert!(decode_error("Error: Wasm Trap: out of bounds memory access").contains("VM Trap: Out of Bounds Access"));
+        assert!(decode_error("Panic: unreachable").contains("VM Trap: Unreachable Instruction"));
+        assert!(decode_error("integer divide by zero").contains("VM Trap: Division by Zero"));
+        assert!(decode_error("stack overflow occurred").contains("VM Trap: Stack Overflow"));
+        assert_eq!(decode_error("normal error"), "normal error");
+    }
+
+    #[test]
+    fn test_extract_wasm_instruction() {
+        let topics = vec!["budget".to_string(), "tick".to_string()];
+        let data = "\"Instruction: i32.add\"".to_string();
+        let instr = extract_wasm_instruction(&topics, &data);
+        assert_eq!(instr, Some("i32.add".to_string()));
+
+        let data2 = "\"Instruction: call 12\"".to_string();
+        let instr2 = extract_wasm_instruction(&topics, &data2);
+        assert_eq!(instr2, Some("call 12".to_string()));
+
+        let topics_none = vec!["other".to_string()];
+        let instr3 = extract_wasm_instruction(&topics_none, &data);
+        assert_eq!(instr3, None);
         let msg = decode_error("Error: Wasm Trap: out of bounds memory access");
         assert!(msg.contains("VM Trap: Out of bounds memory access"));
     }
