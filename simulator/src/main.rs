@@ -247,7 +247,7 @@ fn main() {
     };
 
     // Initialize source mapper if WASM is provided
-    let source_mapper = if let Some(wasm_base64) = &request.contract_wasm {
+    let _source_mapper = if let Some(wasm_base64) = &request.contract_wasm {
         match base64::engine::general_purpose::STANDARD.decode(wasm_base64) {
             Ok(wasm_bytes) => {
                 if let Err(e) = vm::enforce_soroban_compatibility(&wasm_bytes) {
